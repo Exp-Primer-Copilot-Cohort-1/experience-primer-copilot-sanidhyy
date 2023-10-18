@@ -1,58 +1,52 @@
-// create web server
-const express = require("express");
+// create web server with express
+const express = require('express');
 const app = express();
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const port = 4001;
-const mongoose = require("mongoose");
-const config = require("./config/db");
-const commentRoute = require("./routes/comment.route");
-const userRoute = require("./routes/user.route");
-const postRoute = require("./routes/post.route");
-const passport = require("passport");
-const passportConfig = require("./config/passport");
-const session = require("express-session");
-const cookieParser = require("cookie-parser");
-const MongoStore = require("connect-mongo")(session);
+const port = 3000;
+// import data
+const { comments } = require('./data/comments');
+// import functions
+const { findById, findByMovieId, createNewComment } = require('./utils/comments');
 
-// connect to mongodb
-mongoose.Promise = global.Promise;
-mongoose
-  .connect(config.DB, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(
-    () => {
-      console.log("Database is connected");
-    },
-    (err) => {
-      console.log("Can not connect to the database" + err);
-    }
-  );
+// middleware
+app.use(express.json());
 
-// for parsing application/json
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cors());
+// GET /comments - returns all comments
+app.get('/comments', (req, res) => {
+  res.json(comments);
+});
 
-// for parsing application/x-www-form-urlencoded
-app.use(cookieParser());
-app.use(
-  session({
-    secret: "mysecret",
-    resave: true,
-    saveUninitialized: false,
-    store: new MongoStore({ mongooseConnection: mongoose.connection }),
-    cookie: { maxAge: 180 * 60 * 1000 },
-  })
-);
-app.use(passport.initialize());
-app.use(passport.session());
+// GET /comments/:id - returns a single comment by id
+app.get('/comments/:id', (req, res) => {
+  const comment = findById(comments, req.params.id);
+  if (!comment) {
+    res.status(404).json({ msg: `Comment with id ${req.params.id} not found.` });
+    return;
+  }
+  res.json(comment);
+});
 
-// routes
-app.use("/comments", commentRoute);
-app.use("/users", userRoute);
-app.use("/posts", postRoute);
+// GET /comments/movie/:movieId - returns all comments for a movie by movie id
+app.get('/comments/movie/:movieId', (req, res) => {
+  const movieComments = findByMovieId(comments, req.params.movieId);
+  if (!movieComments) {
+    res.status(404).json({ msg: `No comments for movie with id ${req.params.movieId} found.` });
+    return;
+  }
+  res.json(movieComments);
+});
+
+// POST /comments - creates a new comment
+app.post('/comments', (req, res) => {
+  const { commenter, movieId, comment } = req.body;
+  if (!commenter || !movieId || !comment) {
+    res.status(400).json({ msg: 'Please include a commenter, movieId, and comment.' });
+    return;
+  }
+  const newComment = createNewComment(comments, commenter, movieId, comment);
+  res.json(newComment);
+});
 
 // start server
-app.listen(port, function () {
-  console.log("Server is running on port: " + port);
+app.listen(port, () => {
+  console.log(`Server started on port ${port}`);
 });
